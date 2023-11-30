@@ -23,18 +23,26 @@ CRITICAL_SECTION critical_section;
 
 struct funcArgument {
 
-    funcArgument(int _arraySize, double** result, double* fArray, double* sArray, int row, int column) : 
-        arraySize(_arraySize), resultMatrix(result),
-        firstArray(fArray), secondArray(sArray),
-        curRow(row), curColumn(column) {}
+    funcArgument(double** fMatrix, double** sMatrix, 
+                int rf, int cf, int rs, int cs, 
+                double** result, bool** calc) :
+        firstMatrix(fMatrix), secondMatrix(sMatrix),
+        rowsF(rf), columnsF(cf),
+        rowsS(rs), columnsS(cs),
+        resultMatrix(result),
+        calculated(calc) {}
 
-    int arraySize = 0;
-    int curRow = 0;
-    int curColumn = 0;
+    int rowsF = 0;
+    int columnsF = 0;
 
-    double* firstArray = nullptr;
-    double* secondArray = nullptr;
+    int rowsS = 0;
+    int columnsS = 0;
+
+    double** firstMatrix = nullptr;
+    double** secondMatrix = nullptr;
     double** resultMatrix = nullptr;
+
+    bool** calculated;
 };
 
 template<class T>
@@ -60,7 +68,7 @@ void readMatrix(T** a, int n, int m) {
 
 template<class T>
 T** transposeMatrix(T** a, int n, int m) {
-    T** result = createMatrix(m, n);
+    T** result = createMatrix<T>(m, n);
 
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
@@ -76,16 +84,56 @@ double calculateElement(funcArgument* arg) {
     funcArgument* info = static_cast<funcArgument*>(arg);
 
     while (1) {
+
+        EnterCriticalSection(&critical_section);
+
+        int i = 0, j = 0;
+
+        std::cout << "calculated: " << std::endl;
+
+        for (i = 0; i < info->rowsF; i++) {
+            for (j = 0; j < info->columnsS; j++)
+                std::cout << info->calculated[i][j] << " ";
+
+            std::cout << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+
+        bool flag = false;
+
+        for (i = 0; i < info->rowsF && !flag; i++) {
+            for (j = 0; j < info->columnsS; j++)
+                if (!info->calculated[i][j]) {
+                    flag = true;
+                    break;
+                }
+        }
+
+        std::cout << "cur indexes are " << i << " " << j << std::endl;
+
+        LeaveCriticalSection(&critical_section);
+
+        if (i == info->rowsF || j == info->columnsS) {
+            EnterCriticalSection(&critical_section);
+
+            std::cout << "no left spare elements" << std::endl;
+
+            LeaveCriticalSection(&critical_section);
+        }
+
         double result = 0;
 
-        for (int i = 0; i < info->arraySize; i++) {
-            result += info->firstArray[i] * info->secondArray[i];
+        double* firstArray = info->firstMatrix[i];
+        double* secondArray = info->secondMatrix[j];
+
+        for (int k = 0; k < info->columnsF; k++) {
+            result += firstArray[k] * secondArray[k];
             Sleep(100);
         }
 
-        info->resultMatrix[info->curRow][info->curColumn] = result;
-
-        //wait for the next element available
+        info->resultMatrix[i][j] = result;
+        info->calculated[i][j] = true;
     }
 
     return 0;
@@ -122,6 +170,26 @@ int main()
             calculated[i][j] = false;
     }
 
+    for (int i = 0; i < rowsCntFirst; i++) {
+        for (int j = 0; j < columnsCntFirst; j++) {
+            std::cout << firstMatrix[i][j] << " ";
+        }
+
+        std::cout << std::endl;
+    }
+
+    std::cout << std::endl << std::endl;
+
+    for (int i = 0; i < rowsCntSecond; i++) {
+        for (int j = 0; j < columnsCntSecond; j++) {
+            std::cout << secondMatrix[i][j] << " ";
+        }
+
+        std::cout << std::endl;
+    }
+
+    std::cout << std::endl;
+
     int threadCnt;
     std::cout << "enter the thread amount" << std::endl;
     std::cin >> threadCnt;
@@ -131,24 +199,15 @@ int main()
 
     for (int k = 0; k < threadCnt; k++) {
 
-        int i, j;
-
-        for (i = 0; i < rowsCntFirst; i++) {
-            for (j = 0; j < columnsCntSecond; j++)
-                if (!calculated[i]) {
-                    break;
-                }
-        }
-
         funcArgument* curArg = new funcArgument(
-            columnsCntFirst, resultMatrix,
-            firstMatrix[i], secondMatrix[j],
-            i, j
+            firstMatrix, secondMatrix,
+            rowsCntFirst, columnsCntFirst, rowsCntSecond, columnsCntSecond,
+            resultMatrix, calculated
         );
 
-        hThread[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)calculateElement, (void*)curArg, 0, &IDThread[i]);
+        hThread[k] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)calculateElement, (void*)curArg, 0, &IDThread[k]);
 
-        if (hThread[i] == NULL) {
+        if (hThread[k] == NULL) {
             std::cout << "could not create a thread" << std::endl;
         }
     }
