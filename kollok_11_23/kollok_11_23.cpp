@@ -16,77 +16,12 @@
 
 #include <iostream>
 #include <windows.h>
-#include <vector>
-#include <set>
+
+#include "matrixFunctions.h"
 
 CRITICAL_SECTION critical_section;
 
-struct funcArgument {
-
-    funcArgument(double** fMatrix, double** sMatrix, 
-                int rf, int cf, int rs, int cs, int resColCnt,
-                double** result, bool** calc) :
-        firstMatrix(fMatrix), secondMatrix(sMatrix),
-        rowsF(rf), columnsF(cf),
-        rowsS(rs), columnsS(cs),
-        resultMatrix(result),
-        calculated(calc), resultColumns(resColCnt) {}
-
-    int rowsF = 0;
-    int columnsF = 0;
-
-    int rowsS = 0;
-    int columnsS = 0;
-
-    int resultColumns = 0;
-
-    double** firstMatrix = nullptr;
-    double** secondMatrix = nullptr;
-    double** resultMatrix = nullptr;
-
-    bool** calculated;
-};
-
-struct Element {
-    int i;
-    int j;
-};
-
 const int OUT_OF_RANGE = -1;
-
-template<class T>
-T** createMatrix(int n, int m) {
-    T** matrix = new T* [n];
-
-    for (int i = 0; i < n; i++) {
-        matrix[i] = new T[m];
-    }
-
-    return matrix;
-}
-
-template<class T>
-void readMatrix(T** a, int n, int m) {
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < m; j++)
-            std::cin >> a[i][j];
-    }
-
-    return;
-}
-
-template<class T>
-T** transposeMatrix(T** a, int n, int m) {
-    T** result = createMatrix<T>(m, n);
-
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
-            result[i][j] = a[j][i];
-        }
-    }
-
-    return result;
-}
 
 Element getFirstAvailableElement(funcArgument* info) {
 
