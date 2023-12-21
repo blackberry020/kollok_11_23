@@ -24,19 +24,21 @@ CRITICAL_SECTION critical_section;
 struct funcArgument {
 
     funcArgument(double** fMatrix, double** sMatrix, 
-                int rf, int cf, int rs, int cs, 
+                int rf, int cf, int rs, int cs, int resColCnt,
                 double** result, bool** calc) :
         firstMatrix(fMatrix), secondMatrix(sMatrix),
         rowsF(rf), columnsF(cf),
         rowsS(rs), columnsS(cs),
         resultMatrix(result),
-        calculated(calc) {}
+        calculated(calc), resultColumns(resColCnt) {}
 
     int rowsF = 0;
     int columnsF = 0;
 
     int rowsS = 0;
     int columnsS = 0;
+
+    int resultColumns = 0;
 
     double** firstMatrix = nullptr;
     double** secondMatrix = nullptr;
@@ -88,38 +90,28 @@ double calculateElement(funcArgument* arg) {
         EnterCriticalSection(&critical_section);
 
         int i = 0, j = 0;
-
-        std::cout << "calculated: " << std::endl;
-
-        for (i = 0; i < info->rowsF; i++) {
-            for (j = 0; j < info->columnsS; j++)
-                std::cout << info->calculated[i][j] << " ";
-
-            std::cout << std::endl;
-        }
-
-        std::cout << std::endl << std::endl;
-
         bool flag = false;
 
-        for (i = 0; i < info->rowsF && !flag; i++) {
-            for (j = 0; j < info->columnsS; j++)
+        for (i = 0; i < info->rowsF; i++) {
+            for (j = 0; j < info->resultColumns; j++)
                 if (!info->calculated[i][j]) {
                     flag = true;
                     break;
                 }
+            if (flag)
+                break;
         }
-
-        std::cout << "cur indexes are " << i << " " << j << std::endl;
 
         LeaveCriticalSection(&critical_section);
 
-        if (i == info->rowsF || j == info->columnsS) {
+        if (i >= info->rowsF || j >= info->resultColumns) {
             EnterCriticalSection(&critical_section);
 
             std::cout << "no left spare elements" << std::endl;
 
             LeaveCriticalSection(&critical_section);
+
+            return 0;
         }
 
         double result = 0;
@@ -127,9 +119,10 @@ double calculateElement(funcArgument* arg) {
         double* firstArray = info->firstMatrix[i];
         double* secondArray = info->secondMatrix[j];
 
+        std::cout << "first array is " << std::endl;
+
         for (int k = 0; k < info->columnsF; k++) {
             result += firstArray[k] * secondArray[k];
-            Sleep(100);
         }
 
         info->resultMatrix[i][j] = result;
@@ -160,35 +153,17 @@ int main()
     readMatrix(secondMatrixRaw, rowsCntSecond, columnsCntSecond);
 
     double** secondMatrix = transposeMatrix(secondMatrixRaw, rowsCntSecond, columnsCntSecond);
+    
+    int resultMatrixColumnsCnt = columnsCntSecond;
     std::swap(rowsCntSecond, columnsCntSecond);
 
-    double** resultMatrix = createMatrix<double>(rowsCntFirst, columnsCntSecond);
+    double** resultMatrix = createMatrix<double>(rowsCntFirst, resultMatrixColumnsCnt);
 
-    bool** calculated = createMatrix<bool>(rowsCntFirst, columnsCntSecond);
+    bool** calculated = createMatrix<bool>(rowsCntFirst, resultMatrixColumnsCnt);
     for (int i = 0; i < rowsCntFirst; i++) {
-        for (int j = 0; j < columnsCntSecond; j++)
+        for (int j = 0; j < resultMatrixColumnsCnt; j++)
             calculated[i][j] = false;
     }
-
-    for (int i = 0; i < rowsCntFirst; i++) {
-        for (int j = 0; j < columnsCntFirst; j++) {
-            std::cout << firstMatrix[i][j] << " ";
-        }
-
-        std::cout << std::endl;
-    }
-
-    std::cout << std::endl << std::endl;
-
-    for (int i = 0; i < rowsCntSecond; i++) {
-        for (int j = 0; j < columnsCntSecond; j++) {
-            std::cout << secondMatrix[i][j] << " ";
-        }
-
-        std::cout << std::endl;
-    }
-
-    std::cout << std::endl;
 
     int threadCnt;
     std::cout << "enter the thread amount" << std::endl;
@@ -201,7 +176,7 @@ int main()
 
         funcArgument* curArg = new funcArgument(
             firstMatrix, secondMatrix,
-            rowsCntFirst, columnsCntFirst, rowsCntSecond, columnsCntSecond,
+            rowsCntFirst, columnsCntFirst, rowsCntSecond, columnsCntSecond, resultMatrixColumnsCnt,
             resultMatrix, calculated
         );
 
@@ -215,6 +190,15 @@ int main()
     for (int i = 0; i < threadCnt; i++) {
         WaitForSingleObject(hThread[i], INFINITE);
         CloseHandle(hThread[i]);
+    }
+
+    std::cout << "result matrix is " << std::endl;
+
+    for (int i = 0; i < rowsCntFirst; i++) {
+        for (int j = 0; j < resultMatrixColumnsCnt; j++)
+            std::cout << resultMatrix[i][j] << " ";
+
+        std::cout << std::endl;
     }
 
     return 0;
