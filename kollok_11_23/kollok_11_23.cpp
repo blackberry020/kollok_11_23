@@ -47,6 +47,13 @@ struct funcArgument {
     bool** calculated;
 };
 
+struct Element {
+    int i;
+    int j;
+};
+
+const int OUT_OF_RANGE = -1;
+
 template<class T>
 T** createMatrix(int n, int m) {
     T** matrix = new T* [n];
@@ -81,6 +88,28 @@ T** transposeMatrix(T** a, int n, int m) {
     return result;
 }
 
+Element getFirstAvailableElement(funcArgument* info) {
+
+    int i = 0, j = 0;
+    bool flag = false;
+
+    for (i = 0; i < info->rowsF; i++) {
+        for (j = 0; j < info->resultColumns; j++)
+            if (!info->calculated[i][j]) {
+                flag = true;
+                break;
+            }
+        if (flag)
+            break;
+    }
+
+    if (i >= info->rowsF || j >= info->resultColumns) {
+        return { -1, -1 };
+    }
+
+    return { i, j };
+}
+
 double calculateElement(funcArgument* arg) {
 
     funcArgument* info = static_cast<funcArgument*>(arg);
@@ -89,24 +118,9 @@ double calculateElement(funcArgument* arg) {
 
         EnterCriticalSection(&critical_section);
 
-        int i = 0, j = 0;
-        bool flag = false;
+        Element curElemet = getFirstAvailableElement(info);
 
-        for (i = 0; i < info->rowsF; i++) {
-            for (j = 0; j < info->resultColumns; j++)
-                if (!info->calculated[i][j]) {
-                    flag = true;
-                    break;
-                }
-            if (flag)
-                break;
-        }
-
-        LeaveCriticalSection(&critical_section);
-
-        if (i >= info->rowsF || j >= info->resultColumns) {
-            EnterCriticalSection(&critical_section);
-
+        if (curElemet.i == OUT_OF_RANGE || curElemet.j == OUT_OF_RANGE) {
             std::cout << "no left spare elements" << std::endl;
 
             LeaveCriticalSection(&critical_section);
@@ -114,19 +128,19 @@ double calculateElement(funcArgument* arg) {
             return 0;
         }
 
+        LeaveCriticalSection(&critical_section);
+
         double result = 0;
 
-        double* firstArray = info->firstMatrix[i];
-        double* secondArray = info->secondMatrix[j];
-
-        std::cout << "first array is " << std::endl;
+        double* firstArray = info->firstMatrix[curElemet.i];
+        double* secondArray = info->secondMatrix[curElemet.j];
 
         for (int k = 0; k < info->columnsF; k++) {
             result += firstArray[k] * secondArray[k];
         }
 
-        info->resultMatrix[i][j] = result;
-        info->calculated[i][j] = true;
+        info->resultMatrix[curElemet.i][curElemet.j] = result;
+        info->calculated[curElemet.i][curElemet.j] = true;
     }
 
     return 0;
@@ -137,6 +151,7 @@ int main()
     InitializeCriticalSection(&critical_section);
 
     int rowsCntFirst, columnsCntFirst, columnsCntSecond;
+
     std::cout << "enter rows amount and columns amount for the first matrix" << std::endl;
     std::cin >> rowsCntFirst >> columnsCntFirst;
 
@@ -146,13 +161,14 @@ int main()
 
     std::cout << "enter columns amount for the second matrix" << std::endl;
     std::cin >> columnsCntSecond;
+
     int rowsCntSecond = columnsCntFirst;
 
-    double** secondMatrixRaw = createMatrix<double>(rowsCntSecond, columnsCntSecond);
+    double** secondMatrixRow = createMatrix<double>(rowsCntSecond, columnsCntSecond);
     std::cout << "enter second matrix" << std::endl;
-    readMatrix(secondMatrixRaw, rowsCntSecond, columnsCntSecond);
+    readMatrix(secondMatrixRow, rowsCntSecond, columnsCntSecond);
 
-    double** secondMatrix = transposeMatrix(secondMatrixRaw, rowsCntSecond, columnsCntSecond);
+    double** secondMatrix = transposeMatrix(secondMatrixRow, rowsCntSecond, columnsCntSecond);
     
     int resultMatrixColumnsCnt = columnsCntSecond;
     std::swap(rowsCntSecond, columnsCntSecond);
